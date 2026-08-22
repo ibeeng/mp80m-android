@@ -27,35 +27,81 @@ object EscPos {
     private const val ESC = 0x1B
     private const val GS = 0x1D
 
-    /** Full end-to-end: bitmap -> ESC/POS byte stream. */
+    /**
+     * Full end-to-end: bitmap -> ESC/POS byte stream, repeated [copies] times.
+     * Each copy is a full init + raster + cut so multi-copy prints cleanly.
+     */
     fun encodeImage(
         src: Bitmap,
         maxWidth: Int = MAX_WIDTH,
         trim: Boolean = true,
         trimMargin: Int = 16,
+        copies: Int = 1,
     ): ByteArray {
-        val fitted = fitWidth(src, maxWidth)
-        var mono = ditherFloydSteinberg(fitted)   // boolean[h][w], true = ink
-        if (trim) mono = trimWhitespace(mono, trimMargin)
+        val mono = toMonochrome(src, maxWidth, trim, trimMargin)
+        val one = ByteArrayOutputStream()
+        one.write(byteArrayOf(ESC.toByte(), 0x40))            // ESC @  init
+        one.write(byteArrayOf(ESC.toByte(), 0x61, 0x01))      // ESC a 1  center
+        one.write(byteArrayOf(ESC.toByte(), 0x32))            // ESC 2  reset line spacing
+        one.write(rasterRows(mono))
+        one.write(feedAndCut())
+        val single = one.toByteArray()
 
+        if (copies <= 1) return single
         val out = ByteArrayOutputStream()
-        out.write(byteArrayOf(ESC.toByte(), 0x40))            // ESC @  init
-        out.write(byteArrayOf(ESC.toByte(), 0x61, 0x01))      // ESC a 1  center
-        out.write(byteArrayOf(ESC.toByte(), 0x32))            // ESC 2  reset line spacing
-        out.write(rasterRows(mono))
-        out.write(feedAndCut())
+        repeat(copies.coerceAtLeast(1)) { out.write(single) }
         return out.toByteArray()
     }
 
-    /** Text receipt helper (built-in font). Left-aligned, feed + cut. */
-    fun encodeText(text: String): ByteArray {
+    /** Text receipt helper (built-in font). Left-aligned, feed + cut, [copies] times. */
+    fun encodeText(text: String, copies: Int = 1): ByteArray {
+        val one = ByteArrayOutputStream()
+        one.write(byteArrayOf(ESC.toByte(), 0x40))            // init
+        one.write(byteArrayOf(ESC.toByte(), 0x61, 0x00))      // left
+        one.write(text.toByteArray(Charsets.US_ASCII))
+        if (!text.endsWith("\n")) one.write('\n'.code)
+        one.write(feedAndCut())
+        val single = one.toByteArray()
+
+        if (copies <= 1) return single
         val out = ByteArrayOutputStream()
-        out.write(byteArrayOf(ESC.toByte(), 0x40))            // init
-        out.write(byteArrayOf(ESC.toByte(), 0x61, 0x00))      // left
-        out.write(text.toByteArray(Charsets.US_ASCII))
-        if (!text.endsWith("\n")) out.write('\n'.code)
-        out.write(feedAndCut())
+        repeat(copies.coerceAtLeast(1)) { out.write(single) }
         return out.toByteArray()
+    }
+
+    /**
+     * Produce the exact 1-bit monochrome bitmap that would be printed (fit +
+     * dither + trim). Used by the on-screen print preview so what you see is
+     * what the printer emits. Black pixels = ink.
+     */
+    fun previewBitmap(
+        src: Bitmap,
+        maxWidth: Int = MAX_WIDTH,
+        trim: Boolean = true,
+        trimMargin: Int = 16,
+    ): Bitmap {
+        val mono = toMonochrome(src, maxWidth, trim, trimMargin)
+        val h = mono.size
+        val w = if (h > 0) mono[0].size else 0
+        val bmp = Bitmap.createBitmap(maxOf(w, 1), maxOf(h, 1), Bitmap.Config.ARGB_8888)
+        val px = IntArray(maxOf(w, 1) * maxOf(h, 1)) { Color.WHITE }
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                if (mono[y][x]) px[y * w + x] = Color.BLACK
+            }
+        }
+        if (w > 0 && h > 0) bmp.setPixels(px, 0, w, 0, 0, w, h)
+        return bmp
+    }
+
+    /** fit -> dither -> optional trim, returning boolean[h][w] (true = ink). */
+    private fun toMonochrome(
+        src: Bitmap, maxWidth: Int, trim: Boolean, trimMargin: Int
+    ): Array<BooleanArray> {
+        val fitted = fitWidth(src, if (maxWidth <= 0) MAX_WIDTH else maxWidth)
+        var mono = ditherFloydSteinberg(fitted)
+        if (trim) mono = trimWhitespace(mono, trimMargin)
+        return mono
     }
 
     private fun feedAndCut(): ByteArray = byteArrayOf(
