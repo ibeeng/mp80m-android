@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.MP80M" parent="android:Theme.Material.NoActionBar" />
+</resources>
