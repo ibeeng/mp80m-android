@@ -57,6 +57,7 @@ object EscPos {
     fun encodeText(text: String, copies: Int = 1): ByteArray {
         val one = ByteArrayOutputStream()
         one.write(byteArrayOf(ESC.toByte(), 0x40))            // init
+        one.write(byteArrayOf(ESC.toByte(), 0x21, 0x00))      // ESC ! 0  font A, normal
         one.write(byteArrayOf(ESC.toByte(), 0x61, 0x00))      // left
         one.write(text.toByteArray(Charsets.US_ASCII))
         if (!text.endsWith("\n")) one.write('\n'.code)

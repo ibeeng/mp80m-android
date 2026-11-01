@@ -15,7 +15,7 @@ encoder ESC/POS `GS v 0` raster + Floyd–Steinberg dither + trim whitespace.
 
 ## 📥 Download
 
-**[⬇️ Download APK terbaru (v1.1.0)](https://github.com/ibeeng/mp80m-android/releases/latest/download/mp80m-printer-v1.1.0.apk)**
+**[⬇️ Download APK terbaru (v1.2.0)](https://github.com/ibeeng/mp80m-android/releases/latest/download/mp80m-printer-v1.2.0.apk)**
 
 Atau lihat semua versi di halaman [**Releases**](https://github.com/ibeeng/mp80m-android/releases).
 

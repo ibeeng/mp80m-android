@@ -42,24 +42,52 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDark()) darkColorScheme() else lightColorScheme()) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppScreen(vm, ::consumeIncomingShare)
+                    AppScreen(
+                        vm = vm,
+                        consumeShare = ::consumeIncomingShare,
+                        pendingPrint = pendingPrintText.value,
+                        clearPendingPrint = { pendingPrintText.value = null },
+                    )
                 }
             }
         }
-        handleShare(intent)
+        handleIncoming(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleShare(intent)
+        handleIncoming(intent)
     }
 
     private var pendingShareUri: Uri? = null
     private var pendingShareIsPdf = false
 
-    private fun handleShare(intent: Intent?) {
+    /**
+     * Struk dari PrintBridgeActivity (dibawa via EXTRA_PENDING_TEXT) kalau cetak
+     * otomatis gagal dan user harus buka app buat cetak manual.
+     */
+    private val pendingPrintText = mutableStateOf<String?>(null)
+
+    /**
+     * Pintu masuk intent: PRINT dari PrintBridgeActivity (via extra) diutamakan,
+     * sisanya (SEND/VIEW file) masuk jalur share seperti sebelumnya.
+     */
+    private fun handleIncoming(intent: Intent?) {
         intent ?: return
+        if (handleExtraPrint(intent)) return
+        handleShare(intent)
+    }
+
+    /** @return true kalau intent bawa struk pending dari PrintBridgeActivity. */
+    private fun handleExtraPrint(intent: Intent): Boolean {
+        val text = intent.getStringExtra(PrintBridgeActivity.EXTRA_PENDING_TEXT)
+        if (text.isNullOrBlank()) return false
+        pendingPrintText.value = text
+        return true
+    }
+
+    private fun handleShare(intent: Intent) {
         val uri: Uri? = when (intent.action) {
             Intent.ACTION_SEND -> {
                 @Suppress("DEPRECATION")
@@ -92,6 +120,8 @@ private fun isSystemInDark(): Boolean =
 fun AppScreen(
     vm: PrinterViewModel,
     consumeShare: ((Uri) -> Unit, (Uri) -> Unit) -> Unit,
+    pendingPrint: String?,
+    clearPendingPrint: () -> Unit,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContextSafe()
@@ -111,6 +141,15 @@ fun AppScreen(
     // Once connected, consume any file shared into the app.
     LaunchedEffect(ui.connected) {
         if (ui.connected) consumeShare({ vm.stageImage(it) }, { vm.stagePdf(it) })
+    }
+
+    // Deeplink dari qasirku+ (mp80m://print?data=...): cetak langsung.
+    LaunchedEffect(pendingPrint) {
+        val text = pendingPrint
+        if (text != null) {
+            vm.queueDirectPrint(text)
+            clearPendingPrint()
+        }
     }
 
     val galleryLauncher = rememberLauncherForActivityResult(

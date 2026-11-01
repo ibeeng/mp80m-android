@@ -23,6 +23,15 @@ class PrinterBluetooth {
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         const val CHUNK = 256
         const val GAP_MS = 20L
+
+        /**
+         * Satu socket untuk seluruh proses.
+         *
+         * PrintBridgeActivity (cetak tanpa UI) dan PrinterViewModel (UI app) HARUS
+         * pakai instance yang sama — kalau masing-masing bikin socket sendiri,
+         * printer nolak koneksi kedua dan cetak dari qasirku+ jadi gagal random.
+         */
+        val shared: PrinterBluetooth by lazy { PrinterBluetooth() }
     }
 
     private var socket: BluetoothSocket? = null

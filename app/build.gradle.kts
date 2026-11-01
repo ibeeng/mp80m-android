@@ -12,13 +12,17 @@ android {
         applicationId = "com.ibeeng.mp80m"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.2.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Ditandatangani kunci debug yang sama dengan rilis sebelumnya supaya bisa
+            // dipasang langsung di atas versi lama (tanpa copot dulu).
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -56,7 +56,7 @@ data class UiState(
 
 class PrinterViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val printer = PrinterBluetooth()
+    private val printer = PrinterBluetooth.shared
     private val store = SettingsStore(app)
 
     private val _ui = MutableStateFlow(
@@ -182,6 +182,49 @@ class PrinterViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Cetak langsung dari deeplink qasirku+ (mp80m://print?data=...).
+     * Tanpa pratinjau: auto-connect ke printer terakhir lalu kirim byte-nya.
+     * Kalau belum ada printer terakhir / gagal connect, teks di-stage ke
+     * pratinjau biasa supaya user tetap bisa cetak manual.
+     */
+    fun queueDirectPrint(text: String) {
+        if (text.isBlank()) return
+        val s = _ui.value.settings
+        log("Struk masuk dari qasirku+ (${text.lines().size} baris)")
+        setBusy(true)
+        viewModelScope.launch {
+            try {
+                if (!printer.isConnected) {
+                    if (s.lastMac.isNullOrBlank()) {
+                        log("Belum ada printer terakhir — buka pratinjau")
+                        _ui.value = _ui.value.copy(
+                            pending = PendingJob.TextJob(text, emptyList())
+                        )
+                        return@launch
+                    }
+                    log("Auto-connect ${s.lastMac}...")
+                    withContext(Dispatchers.IO) { printer.connect(s.lastMac) }
+                    _ui.value = _ui.value.copy(
+                        connected = true, connectedMac = s.lastMac
+                    )
+                }
+                val copies = s.copies.coerceIn(1, 20)
+                val bytes = withContext(Dispatchers.Default) {
+                    EscPos.encodeText(text, copies)
+                }
+                withContext(Dispatchers.IO) { printer.write(bytes) }
+                log("Struk qasirku+ tercetak (${bytes.size} bytes, ${copies}x)")
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(
+                    connected = false, connectedMac = null,
+                    pending = PendingJob.TextJob(text, emptyList())
+                )
+                log("Cetak langsung gagal: ${e.message} — buka pratinjau")
+            } finally { setBusy(false) }
+        }
+    }
+
     // --- Settings ---
 
     fun updateSettings(trim: Boolean, trimMargin: Int, autoReconnect: Boolean, copies: Int) {
@@ -218,7 +261,9 @@ class PrinterViewModel(app: Application) : AndroidViewModel(app) {
     private fun setBusy(b: Boolean) { _ui.value = _ui.value.copy(busy = b) }
 
     override fun onCleared() {
-        printer.close()
+        // JANGAN close() di sini: socket-nya milik proses (PrinterBluetooth.shared)
+        // dan dipakai juga oleh PrintBridgeActivity. Nutup di sini bikin cetak
+        // dari qasirku+ gagal tiap kali UI app pernah dibuka lalu ditutup.
         super.onCleared()
     }
 }
