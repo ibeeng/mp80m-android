@@ -5,7 +5,8 @@ set -uo pipefail
 REPO="ibeeng/mp80m-android"
 TAG="v1.2.0"
 NAME="MP-80M Printer v1.2.0"
-APK="$HOME/AndroidProjects/mp80m-android/app/build/outputs/apk/release/app-release.apk"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APK="$ROOT/app/build/outputs/apk/release/app-release.apk"
 ASSET_NAME="mp80m-printer-v1.2.0.apk"
 
 TOKEN=$(sed -n 's|https://[^:]*:\([^@]*\)@github.com|\1|p' "$HOME/.git-credentials")
