@@ -20,7 +20,12 @@ encoder ESC/POS `GS v 0` raster + Floyd–Steinberg dither + trim whitespace.
 Atau lihat semua versi di halaman [**Releases**](https://github.com/ibeeng/mp80m-android/releases).
 
 Setelah download di HP: buka file → install (izinkan "Install dari sumber tak
-dikenal" bila diminta).
+dikenal" bila diminta). Ukuran APK ±1 MB.
+
+> **Memperbarui dari versi lama?** Cukup pasang di atas app yang sudah ada — tanda
+> tangannya sama dengan v1.1.0, jadi tidak perlu dicopot dan setelan printer tetap
+> tersimpan. **Cetak langsung dari web (`mp80m://print`) baru ada di v1.2.0**; v1.1.0
+> tidak punya fitur ini, jadi tombol cetak di web tidak berefek.
 
 ---
 
@@ -32,6 +37,8 @@ dikenal" bila diminta).
 - **Cetak gambar** dari galeri (PNG/JPEG) — auto resize ke 576 dot, dither
 - **Cetak PDF** multi-halaman (render via `PdfRenderer` bawaan Android)
 - **Pratinjau sebelum cetak** — lihat hasil di layar sebelum keluar kertas
+- **Cetak langsung dari web** (v1.2.0) — tap tombol di web (mis. admin TELBA) → kertas
+  keluar tanpa membuka app, lewat link `mp80m://print?data=…` (lihat bagian di bawah)
 - **Cetak via Share** — dari galeri / WhatsApp / PDF viewer, tap Share → MP-80M Printer
 - **Template teks** — simpan format struk/label yang sering dipakai
 - **Jumlah copy** 1–20 sekali cetak
@@ -59,13 +66,48 @@ dikenal" bila diminta).
 5. Atau dari app lain: **Share** gambar/PDF → pilih **MP-80M Printer**.
 6. **Setelan** (opsional): potong ruang kosong, margin bawah, jumlah copy, auto-reconnect.
 
+### Cetak langsung dari web (`mp80m://print`)
+
+Web bisa mencetak ke printer dengan membuka link:
+
+```
+mp80m://print?data=<base64url(teks)>
+```
+
+- `data` = teks struk (ASCII) yang di-encode **base64url**. Byte kontrol ESC/POS
+  (rata tengah, tebal, QR bawaan printer, potong kertas) ikut diteruskan apa adanya
+  karena semuanya ASCII. Karakter non-ASCII tidak tercetak, jadi ganti dulu di sisi web.
+- Ditangkap `PrintBridgeActivity` — tanpa tampilan, langsung `finish()`, pekerjaan cetak
+  jalan di `PrintQueue`. Hasilnya muncul sebagai toast ("Struk tercetak" / "Gagal cetak: …").
+- Link harus dibuka dari **gestur pengguna** (klik tombol/`<a>`) di **Chrome Android**.
+  Browser dalam aplikasi (WhatsApp, Instagram, dll.) sering memblokir link seperti ini.
+- **Syarat di tiap HP, sekali saja:** buka app → beri izin Bluetooth → pilih & hubungkan
+  printer. Bila belum, app terbuka dan meminta ini lebih dulu (struk dibawa supaya bisa
+  dicetak manual).
+- Printer Bluetooth hanya melayani **satu HP sekaligus**; putuskan dari HP lain dulu.
+
+Contoh dari JavaScript:
+
+```js
+const data = btoa('Halo\n\n\n').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+location.href = `mp80m://print?data=${data}`; // panggil dari handler klik
+```
+
+Dipakai oleh admin TELBA (nota & label pesanan) dan qasirku+.
+
 ### Merilis versi baru (untuk maintainer)
 
 Setelah build APK, buat GitHub Release + upload APK:
 ```bash
 bash make-release.sh   # baca token dari ~/.git-credentials, bikin tag + upload APK
 ```
-Ubah `TAG` / `versionName` di script + `app/build.gradle.kts` untuk versi berikutnya.
+Ubah `TAG` / `versionName` / `ASSET_NAME` di script + `versionName` & `versionCode` di
+`app/build.gradle.kts` untuk versi berikutnya. Skrip mengunggah build **release**:
+```bash
+./gradlew assembleRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease
+# -> app/build/outputs/apk/release/app-release.apk
+```
+(`-x lint…` hanya perlu bila offline; tanpa itu Gradle mengunduh lint dulu.)
 
 ---
 
@@ -82,12 +124,18 @@ Buka folder project → tunggu Gradle sync → **Build > Build APK(s)** atau **R
 # set path SDK (sesuaikan)
 echo "sdk.dir=$HOME/Android/Sdk" > local.properties
 
-# build APK debug
+# build APK debug (±16 MB, tanpa pengecilan)
 ./gradlew assembleDebug
+# -> app/build/outputs/apk/debug/app-debug.apk
 
-# APK ada di:
-# app/build/outputs/apk/debug/app-debug.apk
+# build APK release (±1 MB, R8 minify + shrink resources)
+./gradlew assembleRelease
+# -> app/build/outputs/apk/release/app-release.apk
 ```
+
+> Gradle butuh **JDK 17 lengkap** (ada `javac`). Bila `JAVA_HOME` menunjuk ke JRE saja,
+> build gagal dengan *"does not provide the required capabilities: [JAVA_COMPILER]"* —
+> set `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`.
 
 Install ke HP yang terhubung ADB:
 ```bash
@@ -106,6 +154,9 @@ app/src/main/java/com/ibeeng/mp80m/
 ├── PrinterBluetooth.kt    SPP socket (UUID 00001101), connect, write ter-pace
 ├── EscPos.kt              encoder ESC/POS: fit + dither + trim + GS v 0
 ├── DocRender.kt           render PDF -> bitmap (PdfRenderer bawaan)
+├── PrintBridgeActivity.kt penangkap link mp80m://print (tanpa UI)
+├── PrintQueue.kt          antrean cetak level-proses + toast hasil
+├── ReceiptData.kt         parser payload dari web (base64url, meta opsional)
 └── SettingsStore.kt       simpan preferensi (SharedPreferences)
 ```
 
@@ -118,7 +169,10 @@ app/src/main/java/com/ibeeng/mp80m/
   (overflow = cetakan "tulisan China" / garbage, sama seperti yang pernah terjadi
   di sisi daemon Linux; di Android SPP stream sudah raw jadi tidak ada translasi byte).
 - **Batas Bluetooth ~10m**: HP harus dalam jangkauan printer saat mencetak.
-- APK **debug** untuk internal/testing. Untuk distribusi, buat build **release** signed.
+- Rilis memakai build **release** (R8 + shrink resources) yang **ditandatangani dengan
+  kunci debug** (`~/.android/debug.keystore`) supaya pembaruan bisa menimpa versi lama.
+  Simpan/backup file keystore itu: bila hilang, HP harus mencopot app lama sebelum
+  memasang yang baru. Cukup untuk pemakaian internal, bukan untuk Play Store.
 
 ---
 
