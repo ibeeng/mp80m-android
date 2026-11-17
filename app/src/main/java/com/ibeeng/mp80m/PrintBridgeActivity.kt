@@ -38,6 +38,24 @@ class PrintBridgeActivity : Activity() {
         val data = intent?.data
         if (data == null || !data.scheme.equals("mp80m", ignoreCase = true)) return
 
+        val pdf = data.getQueryParameter("pdf")
+        if (!pdf.isNullOrBlank()) {
+            if (!PrintQueue.hasBtPermission(this) || SettingsStore(this).load().lastMac.isNullOrBlank()) {
+                PrintQueue.toast(this, "Beri izin Bluetooth dan pilih printer dulu di app MP-80M", long = true)
+                openMainWithText("")
+                return
+            }
+            PrintQueue.toast(this, "Mengunduh label…")
+            PrintQueue.submitPdf(this, pdf) { result ->
+                when (result) {
+                    is PrintQueue.Result.Ok -> PrintQueue.toast(this, "Label tercetak")
+                    is PrintQueue.Result.Fail ->
+                        PrintQueue.toast(this, "Gagal cetak label: ${result.message}", long = true)
+                }
+            }
+            return
+        }
+
         val encoded = data.getQueryParameter("data")
         if (encoded.isNullOrBlank()) {
             PrintQueue.toast(this, "Struk kosong")

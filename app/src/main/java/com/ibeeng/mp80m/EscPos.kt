@@ -37,8 +37,10 @@ object EscPos {
         trim: Boolean = true,
         trimMargin: Int = 16,
         copies: Int = 1,
+        crisp: Boolean = false,
     ): ByteArray {
-        val mono = toMonochrome(src, maxWidth, trim, trimMargin)
+        val mono = toMonochrome(src, maxWidth, trim, trimMargin, crisp)
+        if (mono.none { row -> row.any { it } }) return ByteArray(0)   // halaman kosong: jangan buang kertas
         val one = ByteArrayOutputStream()
         one.write(byteArrayOf(ESC.toByte(), 0x40))            // ESC @  init
         one.write(byteArrayOf(ESC.toByte(), 0x61, 0x01))      // ESC a 1  center
@@ -97,10 +99,10 @@ object EscPos {
 
     /** fit -> dither -> optional trim, returning boolean[h][w] (true = ink). */
     private fun toMonochrome(
-        src: Bitmap, maxWidth: Int, trim: Boolean, trimMargin: Int
+        src: Bitmap, maxWidth: Int, trim: Boolean, trimMargin: Int, crisp: Boolean = false
     ): Array<BooleanArray> {
         val fitted = fitWidth(src, if (maxWidth <= 0) MAX_WIDTH else maxWidth)
-        var mono = ditherFloydSteinberg(fitted)
+        var mono = if (crisp) threshold(fitted) else ditherFloydSteinberg(fitted)
         if (trim) mono = trimWhitespace(mono, trimMargin)
         return mono
     }
@@ -116,6 +118,21 @@ object EscPos {
         val scale = maxWidth.toFloat() / src.width
         val nh = Math.round(src.height * scale)
         return Bitmap.createScaledBitmap(src, maxWidth, nh, true)
+    }
+
+    /** Ambang keras tanpa dither: tepi batang barcode dan huruf label tetap lurus. */
+    fun threshold(bmp: Bitmap): Array<BooleanArray> {
+        val w = bmp.width
+        val h = bmp.height
+        val px = IntArray(w * h)
+        bmp.getPixels(px, 0, w, 0, 0, w, h)
+        return Array(h) { y ->
+            BooleanArray(w) { x ->
+                val c = px[y * w + x]
+                Color.alpha(c) > 127 &&
+                    0.299f * Color.red(c) + 0.587f * Color.green(c) + 0.114f * Color.blue(c) < 128f
+            }
+        }
     }
 
     /**

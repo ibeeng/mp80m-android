@@ -31,6 +31,10 @@ object DocRender {
                 input?.copyTo(output)
             }
         }
+        try { return pdfToBitmaps(tmp) } finally { tmp.delete() }
+    }
+
+    fun pdfToBitmaps(tmp: File): List<Bitmap> {
         val out = mutableListOf<Bitmap>()
         val pfd = ParcelFileDescriptor.open(tmp, ParcelFileDescriptor.MODE_READ_ONLY)
         PdfRenderer(pfd).use { renderer ->
@@ -48,7 +52,6 @@ object DocRender {
             }
         }
         pfd.close()
-        tmp.delete()
         return out
     }
 }

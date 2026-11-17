@@ -3,11 +3,11 @@
 set -uo pipefail
 
 REPO="ibeeng/mp80m-android"
-TAG="v1.2.0"
-NAME="MP-80M Printer v1.2.0"
+TAG="v1.3.0"
+NAME="MP-80M Printer v1.3.0"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APK="$ROOT/app/build/outputs/apk/release/app-release.apk"
-ASSET_NAME="mp80m-printer-v1.2.0.apk"
+ASSET_NAME="mp80m-printer-v1.3.0.apk"
 
 TOKEN=$(sed -n 's|https://[^:]*:\([^@]*\)@github.com|\1|p' "$HOME/.git-credentials")
 if [ -z "$TOKEN" ]; then echo "NO_TOKEN"; exit 1; fi
@@ -19,7 +19,7 @@ NOTES=$(cat <<'MD'
 Aplikasi Android mandiri untuk cetak ke printer thermal Bluetooth MP-80M / RPP02N.
 
 ## Cara pakai
-1. Download **mp80m-printer-v1.2.0.apk** di bawah (Assets).
+1. Download **mp80m-printer-v1.3.0.apk** di bawah (Assets).
 2. Install di HP (izinkan "Install dari sumber tak dikenal" bila diminta).
 3. Pairing printer di Setelan Bluetooth HP (sekali saja).
 4. Buka app -> beri izin Bluetooth -> pilih printer -> Hubungkan.
@@ -33,7 +33,8 @@ Aplikasi Android mandiri untuk cetak ke printer thermal Bluetooth MP-80M / RPP02
 - Jumlah copy 1-20
 - Hemat kertas: potong ruang kosong otomatis
 - Dark / light theme mengikuti sistem
-- **Baru:** cetak langsung dari web (admin TELBA / qasirku+) lewat link `mp80m://print?data=...`, tanpa membuka app. Wajib pilih printer + beri izin Bluetooth sekali di app.
+- **Baru 1.3.0:** cetak label PDF langsung dari tautan (`mp80m://print?pdf=<https url>`), dipakai admin TELBA untuk label resi Mengantar.
+- Cetak langsung dari web (admin TELBA / qasirku+) lewat link `mp80m://print?data=...`, tanpa membuka app. Wajib pilih printer + beri izin Bluetooth sekali di app.
 
 > Build release (dikecilkan R8), ditandatangani kunci yang sama dengan versi sebelumnya sehingga bisa langsung menimpa app lama. Butuh Android 7.0+.
 MD
